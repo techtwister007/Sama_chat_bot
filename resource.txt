@@ -1,0 +1,13 @@
+C:\Users\username\.cache\huggingface\hub
+
+
+    # Create embeddings
+    model_ckpt_path = r'D:\programming\local hugging face embeding\Ollama\new\Ollama\2-ollama-privateGPT-chat-with-docs\embd'
+    print("path :----- ", model_ckpt_path)
+    embeddings = HuggingFaceEmbeddings(model_name=model_ckpt_path)
+
+
+make a dir
+/sentence-transformers/all-MiniLM-L6-v2
+
+then paste your model from cache file here 
