@@ -78,3 +78,7 @@ The supported extensions are:
 3. Local: `pip install -r requirements-gui.txt`, then
    `MODEL_API_URL=<url> MODEL_API_KEY=<key> chainlit run ui.py`.
    Use `upload`, `/github owner/repo`, or `/folder path` to index content, then ask questions.
+
+### Data, benchmark, merge
+- `kaggle/make_dataset.py topics.txt` builds `train.jsonl` + held-out `bench.jsonl` with a teacher API (put topics one per line; use a mix of ~60 defensive-security topics).
+- `kaggle/benchmark_merge.py` blind-judges base vs fine-tuned (paired, order randomized), then merges the LoRA into a standalone checkpoint.
