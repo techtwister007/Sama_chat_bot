@@ -1,0 +1,6 @@
+chainlit
+chromadb>=0.4.22
+sentence-transformers
+PyMuPDF
+python-docx
+requests

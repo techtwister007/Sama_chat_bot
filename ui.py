@@ -1,62 +1,46 @@
 import chainlit as cl
+
+from sama import rag
 from user_func import process_query
-import time
+
+HELP = ("Commands:\n- `upload` : add local files (pdf, docx, txt, code...)\n"
+        "- `/github owner/repo [ref] [token]` : index a GitHub repo (token only for private repos)\n"
+        "- `/folder path` : index a local folder\n- anything else : ask a question")
 
 
 @cl.on_chat_start
 async def start():
-    """
-    Initializes the bot when a new chat starts.
+    await cl.Message(content="Hi, I'm Sama. Chat with your files and GitHub repos.\n\n" + HELP).send()
 
-    This asynchronous function creates a new instance of the retrieval QA bot,
-    sends a welcome message, and stores the bot instance in the user's session.
-    """
-    chain="chain" #buffer sentece
-    welcome_message = cl.Message(content="Starting the bot...")
-    await welcome_message.send()
-    welcome_message.content = (
-        "Hi, Welcome to Chat With Documents using Ollama (mistral model) and LangChain."
-    )
-    await welcome_message.update()
-    cl.user_session.set("chain", chain)
 
 @cl.on_message
 async def main(message: cl.Message):
+    text = message.content.strip()
 
-    # Your custom logic goes here...
-    query=message.content
-
-    if query=="upload" :
-        files = None
-        # Wait for the user to upload a file
-        while files == None:
-            files = await cl.AskFileMessage(
-                content="Please upload a text file to begin!", accept=["text/plain"]
-            ).send()
-
-        text_file = files[0]
-
-        with open(text_file.path, "r", encoding="utf-8") as f:
-            text = f.read()
-
-        # Let the user know that the system is ready
-        await cl.Message(
-            content=f"`{text_file.name}` uploaded, it contains {len(text)} characters!"
-        ).send()
-
-        
-
-        await cl.Message(
-            content="done "
-        ).send()
-
-
-    else :
-        result = process_query(query)
-        answer = result["answer"]
-        documents = result["documents"]
-
-        # Send a response back to the user
-        await cl.Message(
-            content=answer,
-        ).send()
+    if text == "upload":
+        files = await cl.AskFileMessage(content="Upload files to index.", accept=["*/*"],
+                                        max_files=20, max_size_mb=50).send()
+        n = 0
+        for f in files or []:
+            with open(f.path, "rb") as fh:
+                n += await cl.make_async(rag.add_file)(f.name, fh.read())
+        await cl.Message(content=f"Indexed {n} chunks.").send()
+    elif text.startswith("/github"):
+        parts = text.split()[1:]
+        if not parts:
+            await cl.Message(content=HELP).send()
+            return
+        n = await cl.make_async(rag.add_github_repo)(*parts[:3])
+        await cl.Message(content=f"Indexed {n} chunks from {parts[0]}.").send()
+    elif text.startswith("/folder"):
+        n = await cl.make_async(rag.add_local_folder)(text[len("/folder"):].strip())
+        await cl.Message(content=f"Indexed {n} chunks.").send()
+    else:
+        try:
+            result = await cl.make_async(process_query)(text)
+        except Exception as e:
+            await cl.Message(content=f"Error: {e}").send()
+            return
+        sources = sorted({d["source"] for d in result["documents"]})
+        suffix = "\n\n**Sources:** " + ", ".join(sources) if sources else ""
+        await cl.Message(content=result["answer"] + suffix).send()

@@ -69,3 +69,12 @@ The supported extensions are:
 - `.pptx` : PowerPoint Document,
 - `.ppt` : PowerPoint Document,
 - `.txt`: Text file (UTF-8),
+
+## Sama GUI + Kaggle model
+
+1. Kaggle: upload `kaggle/train_qlora.py` as a notebook (GPU T4 x2) with a dataset holding `train.jsonl`
+   (chat-format `messages`). Run it to produce the LoRA adapter (Qwen3-14B, 4-bit QLoRA).
+2. Kaggle: run `kaggle/serve_model.py` (Internet on, secret `API_KEY`). It prints a `MODEL_API_URL`.
+3. Local: `pip install -r requirements-gui.txt`, then
+   `MODEL_API_URL=<url> MODEL_API_KEY=<key> chainlit run ui.py`.
+   Use `upload`, `/github owner/repo`, or `/folder path` to index content, then ask questions.
