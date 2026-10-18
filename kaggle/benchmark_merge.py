@@ -48,10 +48,16 @@ for q in BENCH:
     ft_ans.append(gen(q))
 
 # %% blind paired judging (order randomized)
+def _judge_prompt(q, a, b):
+    return (f"Question:\n{q}\n\nAnswer A:\n{a}\n\nAnswer B:\n{b}\n\n"
+            'Score each answer 1-5 for technical accuracy, completeness and clarity. Reply only with JSON: {"a": int, "b": int}')
+
 def judge(q, a, b):
-    prompt = (f"Question:\n{q}\n\nAnswer A:\n{a}\n\nAnswer B:\n{b}\n\n"
-              "Score each answer 1-5 for technical accuracy, completeness and clarity. "
-              'Reply only with JSON: {"a": int, "b": int}')
+    prompt = _judge_prompt(q, a, b)
+    if not KEY:  # free fallback: the local base model judges (self-preference bias; rough signal only)
+        with model.disable_adapter():
+            txt = gen(prompt)
+        return json.loads(re.search(r"\{.*?\}", txt, re.S).group(0))
     r = requests.post(f"{JUDGE_URL}/chat/completions", headers={"Authorization": f"Bearer {KEY}"},
                       json={"model": JUDGE_MODEL, "temperature": 0,
                             "messages": [{"role": "user", "content": prompt}]}, timeout=120)

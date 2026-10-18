@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "automate" / "_build"          # gitignored; contains secrets.json
 USER = os.environ["KAGGLE_USERNAME"]
-SLUGS = {"data": "sama-data", "train": "sama-train", "bench": "sama-bench", "serve": "sama-serve"}
+SLUGS = {"data": "sama-data", "train": "sama-train", "bench": "sama-bench", "serve": "sama-serve", "datagen": "sama-datagen"}
 
 
 def run(cmd, **kw):
@@ -20,15 +20,16 @@ def run(cmd, **kw):
     return subprocess.run(cmd, shell=True, check=True, **kw)
 
 
-def make_data():
+def make_data(free=False):
     WORK.mkdir(parents=True, exist_ok=True)
-    if not (WORK / "train.jsonl").exists():
+    shutil.copy(ROOT / "kaggle" / "topics.txt", WORK / "topics.txt")
+    if not free and not (WORK / "train.jsonl").exists():
         run(f"{sys.executable} {ROOT/'kaggle/make_dataset.py'} {ROOT/'kaggle/topics.txt'}", cwd=WORK)
     kf = WORK / "api_key.txt"
     api_key = os.environ.get("API_KEY") or (kf.read_text() if kf.exists() else secrets.token_urlsafe(16))
     (WORK / "api_key.txt").write_text(api_key)
     (WORK / "secrets.json").write_text(json.dumps(
-        {"JUDGE_API_KEY": os.environ["JUDGE_API_KEY"], "API_KEY": api_key}))
+        ({"API_KEY": api_key} if free else {"JUDGE_API_KEY": os.environ["JUDGE_API_KEY"], "API_KEY": api_key})))
     meta = {"title": "sama data", "id": f"{USER}/{SLUGS['data']}", "licenses": [{"name": "CC0-1.0"}]}
     (WORK / "dataset-metadata.json").write_text(json.dumps(meta))
     # private by default; contains your keys, so keep it private
@@ -43,6 +44,7 @@ def make_data():
 
 
 def push_kernel(stage, script, sources_kernels=(), gpu=True):
+    sources_kernels = list(sources_kernels)
     d = WORK / f"k_{stage}"
     shutil.rmtree(d, ignore_errors=True)
     d.mkdir(parents=True)
@@ -90,16 +92,22 @@ def wait_kernel(stage, timeout=12 * 3600):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--free", action="store_true",
+                    help="zero API cost: Kaggle GPU generates the data and the base model judges")
     ap.add_argument("--stage", default="all", choices=["data", "train", "bench", "serve", "all"])
     a = ap.parse_args()
     st = a.stage
     if st in ("data", "all"):
-        make_data()
+        make_data(a.free)
+    if a.free and st in ("data", "all"):
+        push_kernel("datagen", "make_dataset_local.py")
+        wait_kernel("datagen")
+    src = ["datagen"] if a.free else []
     if st in ("train", "all"):
-        push_kernel("train", "train_qlora.py")
+        push_kernel("train", "train_qlora.py", sources_kernels=src)
         wait_kernel("train")
     if st in ("bench", "all"):
-        push_kernel("bench", "benchmark_merge.py", sources_kernels=["train"])
+        push_kernel("bench", "benchmark_merge.py", sources_kernels=["train"] + src)
         wait_kernel("bench")
         run(f"kaggle kernels output {USER}/{SLUGS['bench']} -p {WORK/'out_bench'}")
         print("Benchmark log saved in", WORK / "out_bench")

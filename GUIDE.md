@@ -61,3 +61,12 @@ Fix order of likelihood: out-of-memory -> tunnel URL changed -> missing secret -
 5. Open the printed serve-notebook link, copy `MODEL_API_URL`, then `chainlit run ui.py` and type `/model <url>`.
 Notes: the private `sama-data` dataset holds your keys in `secrets.json`; keep it private.
 Pick the GPU (T4 x2) in the notebook's Settings -> Accelerator if Kaggle defaults to a single GPU.
+
+## Free (no API cost) options
+- **Fully free:** `python automate/pipeline.py --free`. Kaggle's GPU (Qwen3-14B) writes the questions and answers
+  and the base model judges the benchmark. No `JUDGE_API_KEY` needed. Costs GPU hours only (~30 free/week),
+  and the data is only as good as the 14B generator, so quality is below a big teacher.
+- **Free teacher API:** get a free key from Groq (console.groq.com) or Google AI Studio, then
+  `PROVIDER=groq JUDGE_API_KEY=<key> python automate/pipeline.py` (or `PROVIDER=gemini`,
+  `PROVIDER=openrouter_free`). Free tiers rate-limit, so data generation is slow but automatic retries are built in.
+  Model names change; override with `JUDGE_MODEL`.

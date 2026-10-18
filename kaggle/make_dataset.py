@@ -1,16 +1,28 @@
 """Generate train.jsonl / bench.jsonl with a teacher model (OpenAI-compatible API).
 Usage: JUDGE_API_KEY=... python make_dataset.py topics.txt  (one defensive-security topic per line)
 Benchmark questions come from separate generation calls and are deduplicated against training."""
-import json, os, sys, requests
+import json, os, sys, time, requests
 
-URL = os.environ.get("JUDGE_BASE_URL", "https://openrouter.ai/api/v1")
-MODEL = os.environ.get("JUDGE_MODEL", "deepseek/deepseek-chat")
+# Free-tier presets (set PROVIDER=groq|gemini|openrouter_free; model names change, override with JUDGE_MODEL).
+PRESETS = {
+    "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash"),
+    "openrouter_free": ("https://openrouter.ai/api/v1", "deepseek/deepseek-chat-v3-0324:free"),
+    "openrouter": ("https://openrouter.ai/api/v1", "deepseek/deepseek-chat"),
+}
+_url, _model = PRESETS[os.environ.get("PROVIDER", "groq")]
+URL = os.environ.get("JUDGE_BASE_URL", _url)
+MODEL = os.environ.get("JUDGE_MODEL", _model)
 KEY = os.environ["JUDGE_API_KEY"]
 
-def ask(prompt):
-    r = requests.post(f"{URL}/chat/completions", headers={"Authorization": f"Bearer {KEY}"},
-                      json={"model": MODEL, "messages": [{"role": "user", "content": prompt}]}, timeout=180)
-    return r.json()["choices"][0]["message"]["content"]
+def ask(prompt, tries=8):
+    for i in range(tries):  # free tiers rate-limit: back off and retry
+        r = requests.post(f"{URL}/chat/completions", headers={"Authorization": f"Bearer {KEY}"},
+                          json={"model": MODEL, "messages": [{"role": "user", "content": prompt}]}, timeout=180)
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"]
+        time.sleep(min(60, 2 ** i * 3))
+    raise RuntimeError(f"API failed: {r.status_code} {r.text[:200]}")
 
 def questions(topic, n):
     out = ask(f"Write {n} distinct, technically precise questions a security engineer or analyst might ask "
