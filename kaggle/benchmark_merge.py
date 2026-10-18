@@ -3,17 +3,26 @@
 # Kaggle secrets: JUDGE_API_KEY (OpenAI-compatible key, e.g. OpenRouter); optional JUDGE_BASE_URL, JUDGE_MODEL.
 
 # %% setup
+import os, json, glob, subprocess, sys
+def sh(c): subprocess.run(c, shell=True, check=True)
+def secret(name, default=None):
+    """env var -> secrets.json in an attached private dataset -> Kaggle secrets."""
+    if os.environ.get(name): return os.environ[name]
+    for p in glob.glob("/kaggle/input/*/secrets.json"):
+        d = json.load(open(p))
+        if name in d: return d[name]
+    try:
+        from kaggle_secrets import UserSecretsClient
+        return UserSecretsClient().get_secret(name)
+    except Exception:
+        return default
+sh("pip -q install -U transformers peft bitsandbytes accelerate")
 import glob, json, random, re, torch, requests
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from kaggle_secrets import UserSecretsClient
-
-S = UserSecretsClient()
-KEY = S.get_secret("JUDGE_API_KEY")
-try: JUDGE_URL = S.get_secret("JUDGE_BASE_URL")
-except Exception: JUDGE_URL = "https://openrouter.ai/api/v1"
-try: JUDGE_MODEL = S.get_secret("JUDGE_MODEL")
-except Exception: JUDGE_MODEL = "deepseek/deepseek-chat"
+KEY = secret("JUDGE_API_KEY")
+JUDGE_URL = secret("JUDGE_BASE_URL", "https://openrouter.ai/api/v1")
+JUDGE_MODEL = secret("JUDGE_MODEL", "deepseek/deepseek-chat")
 
 BASE = "Qwen/Qwen3-14B"
 ADAPTER = (glob.glob("/kaggle/input/*/sama-lora") or ["/kaggle/working/sama-lora"])[0]

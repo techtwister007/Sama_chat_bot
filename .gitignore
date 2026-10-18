@@ -1,0 +1,4 @@
+automate/_build/
+logs/
+*.jsonl
+db/

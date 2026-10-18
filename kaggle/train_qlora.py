@@ -3,9 +3,22 @@
 # and bench.jsonl kept OUT of training. Defensive-security Q&A you wrote or generated.
 
 # %% install
-# !pip -q install -U transformers peft trl bitsandbytes datasets accelerate
 
 # %% config
+import os, json, glob, subprocess, sys
+def sh(c): subprocess.run(c, shell=True, check=True)
+def secret(name, default=None):
+    """env var -> secrets.json in an attached private dataset -> Kaggle secrets."""
+    if os.environ.get(name): return os.environ[name]
+    for p in glob.glob("/kaggle/input/*/secrets.json"):
+        d = json.load(open(p))
+        if name in d: return d[name]
+    try:
+        from kaggle_secrets import UserSecretsClient
+        return UserSecretsClient().get_secret(name)
+    except Exception:
+        return default
+sh("pip -q install -U transformers peft trl bitsandbytes datasets accelerate")
 import glob, torch
 from datasets import load_dataset
 from peft import LoraConfig

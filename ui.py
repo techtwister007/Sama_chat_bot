@@ -1,11 +1,11 @@
 import chainlit as cl
 
-from sama import rag
+from sama import llm, rag
 from user_func import process_query
 
 HELP = ("Commands:\n- `upload` : add local files (pdf, docx, txt, code...)\n"
         "- `/github owner/repo [ref] [token]` : index a GitHub repo (token only for private repos)\n"
-        "- `/folder path` : index a local folder\n- anything else : ask a question")
+        "- `/model https://...trycloudflare.com` : point at the Kaggle model\n- `/folder path` : index a local folder\n- anything else : ask a question")
 
 
 @cl.on_chat_start
@@ -32,6 +32,9 @@ async def main(message: cl.Message):
             return
         n = await cl.make_async(rag.add_github_repo)(*parts[:3])
         await cl.Message(content=f"Indexed {n} chunks from {parts[0]}.").send()
+    elif text.startswith("/model"):
+        llm.set_url(text[len("/model"):])
+        await cl.Message(content="Model URL updated.").send()
     elif text.startswith("/folder"):
         n = await cl.make_async(rag.add_local_folder)(text[len("/folder"):].strip())
         await cl.Message(content=f"Indexed {n} chunks.").send()

@@ -51,3 +51,13 @@ ask Claude to do or fix; paste any error message into the chat and Claude will f
 ## When something breaks
 Copy the full error text into the chat. Claude (engineer) edits the code, you re-run the failing phase.
 Fix order of likelihood: out-of-memory -> tunnel URL changed -> missing secret -> package version.
+
+## Automated route (replaces phases 1-4)
+1. Kaggle -> Settings -> API -> Create New Token (gives username and key). Verify your phone first.
+2. `pip install kaggle requests`
+3. Set `KAGGLE_USERNAME`, `KAGGLE_KEY`, `JUDGE_API_KEY` (and optionally `API_KEY`) in your terminal.
+4. `python automate/pipeline.py` runs: generate data -> upload private dataset -> train -> benchmark -> serve.
+   Run one step at a time with `--stage data|train|bench|serve`.
+5. Open the printed serve-notebook link, copy `MODEL_API_URL`, then `chainlit run ui.py` and type `/model <url>`.
+Notes: the private `sama-data` dataset holds your keys in `secrets.json`; keep it private.
+Pick the GPU (T4 x2) in the notebook's Settings -> Accelerator if Kaggle defaults to a single GPU.

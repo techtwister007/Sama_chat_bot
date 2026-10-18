@@ -2,18 +2,29 @@
 # Add Kaggle secret API_KEY (any string) and put the same value in MODEL_API_KEY locally.
 
 # %% install
-# !pip -q install -U transformers peft bitsandbytes accelerate fastapi uvicorn nest_asyncio
-# !wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared && chmod +x cloudflared
 
 # %% serve
+import os, json, glob, subprocess, sys
+def sh(c): subprocess.run(c, shell=True, check=True)
+def secret(name, default=None):
+    """env var -> secrets.json in an attached private dataset -> Kaggle secrets."""
+    if os.environ.get(name): return os.environ[name]
+    for p in glob.glob("/kaggle/input/*/secrets.json"):
+        d = json.load(open(p))
+        if name in d: return d[name]
+    try:
+                return UserSecretsClient().get_secret(name)
+    except Exception:
+        return default
+sh("pip -q install -U transformers peft bitsandbytes accelerate fastapi uvicorn")
+sh("wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared && chmod +x cloudflared")
 import glob, re, subprocess, threading, time, torch, uvicorn
 from fastapi import FastAPI, Header, HTTPException
 from peft import PeftModel
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from kaggle_secrets import UserSecretsClient
 
-API_KEY = UserSecretsClient().get_secret("API_KEY")
+API_KEY = secret("API_KEY")
 BASE = "Qwen/Qwen3-14B"
 ADAPTER = (glob.glob("/kaggle/input/*/sama-lora") or ["/kaggle/working/sama-lora"])[0]
 
