@@ -1,0 +1,67 @@
+network segmentation and zero trust architecture
+firewall rule design and auditing
+intrusion detection with Suricata and Snort rules
+Zeek network traffic analysis
+DNS security and detecting DNS tunneling
+TLS configuration and certificate management
+VPN and secure remote access hardening
+Wi-Fi security and WPA3 hardening
+DDoS mitigation and rate limiting
+email security SPF DKIM DMARC
+phishing detection and user awareness
+Linux server hardening
+Windows hardening and group policy
+Active Directory security and detecting abuse
+Kerberos attack detection
+privilege escalation detection on Linux and Windows
+endpoint detection and response concepts
+Sysmon configuration and event analysis
+Windows event log analysis
+Linux auditd and log monitoring
+SIEM design and log pipeline architecture
+writing Sigma detection rules
+writing YARA rules for malware classification
+MITRE ATT&CK mapping for detection engineering
+threat hunting methodology
+threat intelligence and indicator management
+incident response lifecycle and playbooks
+digital forensics disk and memory analysis
+Volatility memory forensics for defenders
+ransomware defense and recovery planning
+malware static analysis for triage
+malware behavioral analysis in sandboxes
+reverse engineering basics for defenders
+OWASP Top 10 and how to prevent each
+secure coding in Python
+secure coding in JavaScript and Node
+SQL injection prevention
+cross-site scripting prevention and CSP
+CSRF and session management
+authentication and password storage best practices
+OAuth 2.0 and OpenID Connect security pitfalls
+JWT security and common mistakes
+API security and rate limiting
+secrets management and rotation
+static application security testing and code review
+dependency and software supply chain security
+SBOM and vulnerability management
+CI/CD pipeline security
+container security and Docker hardening
+Kubernetes security and RBAC
+cloud security posture on AWS
+IAM least privilege design
+Azure and Entra ID security
+GCP security and organization policies
+infrastructure as code security scanning
+cryptography fundamentals for engineers
+key management and HSMs
+disk encryption and data-at-rest protection
+vulnerability scanning and prioritization with CVSS and EPSS
+patch management strategy
+penetration test reporting and remediation tracking
+security risk assessment and threat modeling with STRIDE
+security compliance basics ISO 27001 and SOC 2
+security awareness and insider threat programs
+mobile app security Android and iOS
+IoT and embedded device security
+industrial control system security basics
