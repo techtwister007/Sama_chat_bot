@@ -2,3 +2,4 @@ automate/_build/
 logs/
 *.jsonl
 db/
+__pycache__/
