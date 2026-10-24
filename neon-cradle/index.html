@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#04010c">
+<meta name="description" content="Hand-tracked neon cat's cradle and energy-ball duels for two players, right in your browser.">
+<title>Neon Cradle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #04010c;
+    --ink: #eef3ff;
+    --muted: #9aa3c7;
+    --glass: rgba(18, 14, 40, .42);
+    --glass-edge: rgba(160, 180, 255, .16);
+    --p1: #19e6ff;
+    --p2: #ff3df2;
+    --gold: #ffd84a;
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action: manipulation; }
+  button { font: inherit; color: inherit; }
+
+  #cam { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0;
+    filter: brightness(.42) saturate(1.25) contrast(1.15); transition: opacity 1.2s ease; }
+  #cam.on { opacity: 1; }
+  #cam.mirror { transform: scaleX(-1); }
+  #fx { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .vignette { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(120% 90% at 50% 50%, transparent 45%, rgba(4,1,12,.55) 75%, rgba(4,1,12,.95) 100%); }
+  .scan { position: fixed; inset: 0; pointer-events: none; opacity: .05; mix-blend-mode: overlay;
+    background: repeating-linear-gradient(0deg, #fff 0 1px, transparent 1px 3px); }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .8s ease .2s; }
+  #hud.on { opacity: 1; }
+  .top { position: absolute; left: 0; right: 0; top: calc(var(--safe-t) + 14px); display: flex;
+    align-items: center; justify-content: space-between; padding: 0 16px; gap: 12px; }
+  .brand { font-family: Orbitron, sans-serif; font-weight: 900; letter-spacing: .28em; font-size: 13px;
+    background: linear-gradient(90deg, var(--p1), #b48bff, var(--p2)); -webkit-background-clip: text; background-clip: text; color: transparent; white-space: nowrap; }
+  .score { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--glass-edge); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    font-family: Orbitron, sans-serif; font-weight: 700; font-size: 15px; }
+  .score .p { font-size: 10px; letter-spacing: .2em; opacity: .75; }
+  .score .n1 { color: var(--p1); text-shadow: 0 0 12px var(--p1); min-width: 1.4em; text-align: right; }
+  .score .n2 { color: var(--p2); text-shadow: 0 0 12px var(--p2); min-width: 1.4em; }
+  .score .vs { opacity: .35; font-size: 11px; }
+  .status { font-size: 11px; color: var(--muted); padding: 7px 12px; border-radius: 999px; white-space: nowrap;
+    background: var(--glass); border: 1px solid var(--glass-edge); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .status b { color: var(--ink); font-weight: 600; }
+
+  .meters { position: absolute; top: calc(var(--safe-t) + 66px); left: 16px; right: 16px; display: flex; justify-content: space-between; }
+  .meter { width: min(34vw, 220px); height: 6px; border-radius: 6px; background: rgba(255,255,255,.08); overflow: hidden; opacity: 0; transition: opacity .3s; }
+  .meter.on { opacity: 1; }
+  .meter i { display: block; height: 100%; width: 0; border-radius: 6px; }
+  #m1 i { background: linear-gradient(90deg, #0077ff, var(--p1), #fff); box-shadow: 0 0 14px var(--p1); }
+  #m2 { transform: scaleX(-1); }
+  #m2 i { background: linear-gradient(90deg, #8a00ff, var(--p2), #fff); box-shadow: 0 0 14px var(--p2); }
+
+  .chips { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-b) + 84px); display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; padding: 0 16px; }
+  .chip { font-size: 11px; letter-spacing: .02em; padding: 7px 12px; border-radius: 999px; color: var(--muted);
+    background: rgba(10,8,26,.45); border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    transition: color .25s, border-color .25s, box-shadow .25s, background .25s; }
+  .chip.on { color: #fff; border-color: rgba(120,230,255,.7); box-shadow: 0 0 18px rgba(25,230,255,.35), inset 0 0 12px rgba(25,230,255,.15); background: rgba(20,40,70,.5); }
+
+  .dock { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 18px); display: flex; gap: 6px; padding: 6px;
+    border-radius: 20px; background: var(--glass); border: 1px solid var(--glass-edge); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    pointer-events: auto; box-shadow: 0 10px 40px rgba(0,0,0,.45); max-width: calc(100vw - 32px); overflow-x: auto; scrollbar-width: none; }
+  .dock button { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 14px; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; color: #cfd6ff; transition: background .2s, color .2s, transform .15s; }
+  .dock button:hover { background: rgba(255,255,255,.08); color: #fff; }
+  .dock button:active { transform: scale(.92); }
+  .dock button.off { color: #5d6488; }
+  .dock svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  #hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; opacity: 0; transition: opacity .6s; }
+  #hint.on { opacity: 1; }
+  #hint .big { font-family: Orbitron, sans-serif; font-size: clamp(16px, 3.4vw, 26px); letter-spacing: .25em; color: #fff; text-shadow: 0 0 20px rgba(120,200,255,.8); }
+  #hint .small { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+  #toast { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); pointer-events: none; font-family: Orbitron, sans-serif; font-weight: 900;
+    font-size: clamp(42px, 11vw, 120px); letter-spacing: .08em; opacity: 0; white-space: nowrap; }
+  #toast.go { animation: toast 1.25s cubic-bezier(.16,1,.3,1) forwards; }
+  @keyframes toast {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); filter: blur(12px); }
+    14% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); }
+    70% { opacity: 1; transform: translate(-50%, -54%) scale(1.04); }
+    100% { opacity: 0; transform: translate(-50%, -64%) scale(1.1); filter: blur(6px); }
+  }
+
+  /* ---------- Intro ---------- */
+  #intro { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; z-index: 5; transition: opacity .9s ease, visibility .9s; }
+  #intro.gone { opacity: 0; visibility: hidden; }
+  .card { width: min(560px, 100%); padding: 34px 28px 26px; border-radius: 28px; text-align: center; position: relative;
+    background: linear-gradient(160deg, rgba(30,22,70,.55), rgba(8,6,24,.55)); border: 1px solid rgba(170,190,255,.18);
+    backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    box-shadow: 0 30px 120px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08); max-height: calc(100vh - 32px); overflow-y: auto; }
+  .eyebrow { font-size: 11px; letter-spacing: .4em; color: var(--muted); text-transform: uppercase; }
+  h1 { margin: 12px 0 6px; font-family: Orbitron, sans-serif; font-weight: 900; font-size: clamp(38px, 10vw, 66px); line-height: 1; letter-spacing: .06em;
+    background: linear-gradient(90deg, var(--p1), #9c7bff 35%, var(--p2) 65%, var(--gold)); background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent; animation: sheen 6s linear infinite;
+    filter: drop-shadow(0 0 22px rgba(140,120,255,.45)); }
+  @keyframes sheen { to { background-position: 200% 0; } }
+  .lede { color: #c7cdea; font-size: 15px; line-height: 1.55; margin: 10px auto 22px; max-width: 420px; font-weight: 300; }
+  .moves { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 24px; text-align: left; }
+  .move { padding: 12px 13px; border-radius: 16px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.07); }
+  .move .k { font-family: Orbitron, sans-serif; font-size: 10px; letter-spacing: .2em; color: var(--p1); margin-bottom: 5px; }
+  .move:nth-child(2) .k { color: #b48bff; } .move:nth-child(3) .k { color: var(--p2); } .move:nth-child(4) .k { color: var(--gold); }
+  .move p { margin: 0; font-size: 12.5px; color: #c2c8e6; line-height: 1.45; }
+  .cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn { border: 0; cursor: pointer; padding: 15px 26px; border-radius: 999px; font-weight: 600; font-size: 15px; letter-spacing: .02em; display: inline-flex; align-items: center; gap: 10px; transition: transform .15s, box-shadow .3s; }
+  .btn:active { transform: scale(.96); }
+  .btn.primary { color: #04010c; background: linear-gradient(90deg, var(--p1), #a98bff, var(--p2)); box-shadow: 0 0 30px rgba(120,140,255,.55), 0 0 80px rgba(255,61,242,.25); }
+  .btn.primary:hover { box-shadow: 0 0 40px rgba(120,140,255,.8), 0 0 110px rgba(255,61,242,.4); }
+  .btn.ghost { color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); }
+  .btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .fine { margin-top: 18px; font-size: 11.5px; color: #7d84a8; line-height: 1.5; }
+  #loading { display: none; align-items: center; justify-content: center; gap: 12px; color: #cfd6ff; font-size: 14px; min-height: 52px; }
+  #loading.on { display: flex; }
+  .spin { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.15); border-top-color: var(--p1); border-right-color: var(--p2); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #err { display: none; margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: rgba(255,60,90,.12); border: 1px solid rgba(255,60,90,.35); color: #ffc6d0; font-size: 13px; line-height: 1.45; text-align: left; }
+  #err.on { display: block; }
+  @media (max-width: 420px) { .card { padding: 26px 18px 20px; } .moves { gap: 8px; } .move { padding: 10px; } .brand { display: none; } }
+  @media (prefers-reduced-motion: reduce) { h1 { animation: none; } }
+</style>
+</head>
+<body>
+<video id="cam" playsinline muted autoplay></video>
+<canvas id="fx"></canvas>
+<div class="vignette"></div>
+<div class="scan"></div>
+
+<div id="hud">
+  <div class="top">
+    <div class="brand">NEON·CRADLE</div>
+    <div class="score"><span class="p" style="color:var(--p1)">P1</span><span class="n1" id="s1">0</span><span class="vs">VS</span><span class="n2" id="s2">0</span><span class="p" style="color:var(--p2)">P2</span></div>
+    <div class="status" id="status"><b>0</b> hands</div>
+  </div>
+  <div class="meters"><div class="meter" id="m1"><i></i></div><div class="meter" id="m2"><i></i></div></div>
+  <div id="hint"><div class="big">SHOW YOUR HANDS</div><div class="small">Up to 2 players · 4 hands · 20 fingertips</div></div>
+  <div class="chips">
+    <span class="chip" id="c-cradle">🕸 Two hands → cradle</span>
+    <span class="chip" id="c-charge">🤲 Palms together → charge</span>
+    <span class="chip" id="c-throw">☄️ Pull apart → throw</span>
+    <span class="chip" id="c-block">🖐 Open palm → block</span>
+  </div>
+  <div class="dock">
+    <button id="b-flip" title="Switch camera" aria-label="Switch camera"><svg viewBox="0 0 24 24"><path d="M3 7h3l2-3h8l2 3h3v12H3z"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2"/><path d="M14 9.5V11h-1.5M10 16.5V15h1.5"/></svg></button>
+    <button id="b-mirror" title="Mirror" aria-label="Mirror"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M8 7 3 12l5 5V7zM16 7l5 5-5 5V7z"/></svg></button>
+    <button id="b-skel" title="Hand skeleton" aria-label="Hand skeleton"><svg viewBox="0 0 24 24"><path d="M12 21v-6M12 15 7 9M12 15l5-6M12 15V6M7 9V5M17 9V6"/><circle cx="12" cy="4" r="1"/><circle cx="7" cy="4" r="1"/><circle cx="17" cy="5" r="1"/></svg></button>
+    <button id="b-sound" title="Sound" aria-label="Sound"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
+    <button id="b-snap" title="Snapshot" aria-label="Save snapshot"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="4"/><path d="M4 7h3l2-3h6l2 3h3v13H4z"/></svg></button>
+    <button id="b-reset" title="Reset score" aria-label="Reset score"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/></svg></button>
+    <button id="b-dl" title="Download this page" aria-label="Download this page"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg></button>
+    <button id="b-fs" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="intro">
+  <div class="card">
+    <div class="eyebrow">Hand-tracked · Two players</div>
+    <h1>NEON CRADLE</h1>
+    <p class="lede">Spin glowing cat's-cradle threads between all twenty fingertips, then cup your palms to charge an energy blast and hurl it at your rival.</p>
+    <div class="moves">
+      <div class="move"><div class="k">WEAVE</div><p>Hold up both hands. Neon threads lace every fingertip. A second player links in.</p></div>
+      <div class="move"><div class="k">CHARGE</div><p>Bring your palms close, facing each other. Hold to grow the energy ball.</p></div>
+      <div class="move"><div class="k">THROW</div><p>Pull your hands apart and the blast flies at the other player.</p></div>
+      <div class="move"><div class="k">DEFEND</div><p>Put an open palm on the incoming ball and it bursts like a firecracker.</p></div>
+    </div>
+    <div class="cta" id="cta">
+      <button class="btn primary" id="start"><svg viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="4"/></svg>Enable camera</button>
+      <button class="btn ghost" id="dl"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Download</button>
+    </div>
+    <div id="loading"><div class="spin"></div><span id="loadtxt">Waking up the camera…</span></div>
+    <div id="err"></div>
+    <div class="fine">Runs entirely on your device. Video never leaves your browser.<br>Works in Chrome, Edge, Firefox and Safari. Needs HTTPS (or localhost) for the camera.</div>
+  </div>
+</div>
+
+<script type="module">
+// Snapshot of this page's own markup, taken before anything changes, so the Download button saves a working copy.
+const SOURCE_HTML = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+const $ = s => document.querySelector(s);
+const video = $('#cam'), cv = $('#fx'), ctx = cv.getContext('2d');
+const TAU = Math.PI * 2;
+const TIPS = [4, 8, 12, 16, 20];
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
+const NEON = [190, 315, 140, 50, 275, 0, 170, 95, 225, 340];
+const SIDE_HUE = [192, 300];
+
+let W = 0, H = 0, DPR = 1, U = 1;
+let view = { ox: 0, oy: 0, w: 1, h: 1 };
+let mirror = true, facing = 'user', showSkel = true, soundOn = true;
+let stream = null, landmarker = null, delegate = 'GPU', running = false;
+let tracked = [], persons = [], nextId = 1;
+let parts = [], shots = [], motes = [];
+let shake = 0, flash = 0, flashHue = 200;
+let score = [0, 0];
+let T = 0;
+const charge = [mkCharge(0), mkCharge(1)];
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rnd = (a, b) => a + Math.random() * (b - a);
+const lerp = (a, b, k) => a + (b - a) * k;
+
+function mkCharge(side) { return { side, level: 0, pos: null, r: 0, failT: 0, hands: null, voice: null }; }
+
+/* ---------------- layout ---------------- */
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 1.75);
+  W = cv.width = Math.round(innerWidth * DPR);
+  H = cv.height = Math.round(innerHeight * DPR);
+  U = Math.min(W, H) / 900;
+  computeView();
+  if (!motes.length) for (let i = 0; i < 70; i++) motes.push({ x: Math.random(), y: Math.random(), z: rnd(.3, 1), h: NEON[i % NEON.length], p: Math.random() * TAU });
+}
+function computeView() {
+  const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.max(W / vw, H / vh);
+  view.w = vw * s; view.h = vh * s; view.ox = (W - view.w) / 2; view.oy = (H - view.h) / 2;
+}
+addEventListener('resize', resize);
+resize();
+
+/* ---------------- glow sprites ---------------- */
+const glowCache = new Map();
+function glow(hue, light = 60) {
+  const h = ((Math.round(hue / 6) * 6) % 360 + 360) % 360;
+  const key = h + '|' + light;
+  let c = glowCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, `hsla(${h},100%,96%,1)`);
+  gr.addColorStop(.16, `hsla(${h},100%,${light}%,.9)`);
+  gr.addColorStop(.42, `hsla(${h},100%,${light}%,.28)`);
+  gr.addColorStop(1, `hsla(${h},100%,${light}%,0)`);
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  glowCache.set(key, c);
+  return c;
+}
+function sprite(x, y, r, hue, a = 1, light = 60) {
+  if (r <= 0 || a <= 0) return;
+  ctx.globalAlpha = Math.min(1, a);
+  ctx.drawImage(glow(hue, light), x - r, y - r, r * 2, r * 2);
+  ctx.globalAlpha = 1;
+}
+
+/* ---------------- audio ---------------- */
+const AC = window.AudioContext || window.webkitAudioContext;
+let ac = null, master = null, noiseBuf = null, lastPop = 0, lastPluck = 0;
+function initAudio() {
+  if (ac || !AC) return;
+  ac = new AC();
+  master = ac.createGain(); master.gain.value = soundOn ? .8 : 0;
+  const comp = ac.createDynamicsCompressor();
+  master.connect(comp); comp.connect(ac.destination);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+function noise(dur, type, f0, f1, gain, q = 1, delay = 0) {
+  if (!ac) return;
+  const t = ac.currentTime + delay;
+  const src = ac.createBufferSource(); src.buffer = noiseBuf;
+  const f = ac.createBiquadFilter(); f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  src.connect(f); f.connect(g); g.connect(master);
+  src.start(t, Math.random()); src.stop(t + dur + .05);
+}
+function tone(type, f0, f1, dur, gain, delay = 0) {
+  if (!ac) return;
+  const t = ac.currentTime + delay;
+  const o = ac.createOscillator(); o.type = type;
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const g = ac.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + .05);
+}
+const sfx = {
+  launch() { noise(.8, 'bandpass', 3200, 260, .9, 1.4); tone('sawtooth', 520, 70, .6, .18); tone('sine', 180, 40, .7, .5); },
+  boom() { noise(1.6, 'lowpass', 4000, 50, 1.2); tone('sine', 140, 28, 1.1, .9); noise(.25, 'highpass', 6000, 2000, .4); },
+  pop(delay = 0) {
+    if (!ac) return;
+    const now = ac.currentTime + delay;
+    if (now - lastPop < .018) return; lastPop = now;
+    noise(rnd(.05, .12), 'highpass', rnd(2500, 5000), 900, rnd(.25, .55), 1, delay);
+    tone('square', rnd(900, 2200), 200, .045, .04, delay);
+  },
+  crackle(n = 18, spread = .9) { for (let i = 0; i < n; i++) this.pop(Math.random() * spread); },
+  fizzle() { noise(.4, 'bandpass', 1800, 400, .25, 3); },
+  pluck(y) {
+    if (!ac || ac.currentTime - lastPluck < .14) return; lastPluck = ac.currentTime;
+    const scale = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3, 659.3, 784];
+    const f = scale[clamp(Math.floor((1 - y / H) * scale.length), 0, scale.length - 1)];
+    tone('triangle', f, f * .995, .9, .06); tone('sine', f * 2, f * 2, .5, .025);
+  }
+};
+function chargeVoice() {
+  if (!ac) return null;
+  const o1 = ac.createOscillator(), o2 = ac.createOscillator(), lfo = ac.createOscillator(), lg = ac.createGain();
+  const f = ac.createBiquadFilter(), g = ac.createGain(), src = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain();
+  o1.type = 'sawtooth'; o2.type = 'sine'; o1.frequency.value = 70; o2.frequency.value = 140;
+  lfo.frequency.value = 7; lg.gain.value = 12; lfo.connect(lg); lg.connect(o1.frequency);
+  f.type = 'lowpass'; f.frequency.value = 400; f.Q.value = 6;
+  g.gain.value = 0;
+  src.buffer = noiseBuf; src.loop = true; nf.type = 'bandpass'; nf.frequency.value = 1200; nf.Q.value = .8; ng.gain.value = 0;
+  o1.connect(f); o2.connect(f); f.connect(g); g.connect(master); src.connect(nf); nf.connect(ng); ng.connect(master);
+  [o1, o2, lfo, src].forEach(n => n.start());
+  return {
+    set(l) {
+      const t = ac.currentTime;
+      o1.frequency.setTargetAtTime(70 + l * 260, t, .08); o2.frequency.setTargetAtTime(140 + l * 520, t, .08);
+      f.frequency.setTargetAtTime(400 + l * 2600, t, .1); g.gain.setTargetAtTime(.05 + l * .16, t, .1);
+      lfo.frequency.setTargetAtTime(6 + l * 18, t, .1); ng.gain.setTargetAtTime(l * .12, t, .1); nf.frequency.setTargetAtTime(1200 + l * 3000, t, .1);
+    },
+    stop() {
+      const t = ac.currentTime;
+      g.gain.setTargetAtTime(0, t, .05); ng.gain.setTargetAtTime(0, t, .05);
+      [o1, o2, lfo, src].forEach(n => n.stop(t + .4));
+    }
+  };
+}
+
+/* ---------------- hand tracking ---------------- */
+async function loadModel() {
+  const V = await import(CDN + '/vision_bundle.mjs');
+  const files = await V.FilesetResolver.forVisionTasks(CDN + '/wasm');
+  const opts = d => ({
+    baseOptions: { modelAssetPath: MODEL, delegate: d },
+    runningMode: 'VIDEO', numHands: 4,
+    minHandDetectionConfidence: .5, minHandPresenceConfidence: .5, minTrackingConfidence: .5
+  });
+  const make = d => V.HandLandmarker.createFromOptions(files, opts(d));
+  let lm;
+  try { lm = await make('GPU'); delegate = 'GPU'; }
+  catch (e) { lm = await make('CPU'); delegate = 'CPU'; }
+  lm._make = make;
+  return lm;
+}
+
+async function startCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    throw new Error('Camera API unavailable. Open this page over HTTPS (or localhost) in Chrome, Firefox, Edge or Safari.');
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true }));
+  await video.play();
+  mirror = facing === 'user';
+  video.classList.toggle('mirror', mirror);
+  $('#b-mirror').classList.toggle('off', !mirror);
+  video.classList.add('on');
+  computeView();
+}
+
+function mapPt(l) {
+  const x = mirror ? 1 - l.x : l.x;
+  return { x: view.ox + x * view.w, y: view.oy + l.y * view.h, z: l.z };
+}
+
+function extCount(p) {
+  const w = p[0]; let n = 0;
+  for (const [tip, pip] of [[8, 6], [12, 10], [16, 14], [20, 18]]) if (dist(p[tip], w) > dist(p[pip], w) * 1.12) n++;
+  if (dist(p[4], p[17]) > dist(p[3], p[17]) * 1.04) n++;
+  return n;
+}
+
+let lastDetectT = 0;
+function ingest(res, now) {
+  const raw = (res.landmarks || []).map(l => l.map(mapPt));
+  const dt = Math.max(.001, (now - lastDetectT) / 1000); lastDetectT = now;
+  const used = new Set(), next = [];
+  for (const pts of raw) {
+    const size = dist(pts[0], pts[9]) || 1;
+    let best = null, bd = Infinity;
+    for (const h of tracked) {
+      if (used.has(h)) continue;
+      const d = dist(h.pts[0], pts[0]);
+      if (d < bd) { bd = d; best = h; }
+    }
+    if (best && bd < size * 2.6) {
+      used.add(best);
+      const a = .62;
+      best.pts = best.pts.map((p, i) => ({ x: p.x + (pts[i].x - p.x) * a, y: p.y + (pts[i].y - p.y) * a, z: pts[i].z }));
+      best.miss = 0;
+      next.push(best);
+    } else {
+      next.push({ id: nextId++, pts, miss: 0, vx: 0, vy: 0, energy: 0, trails: TIPS.map(() => []), palm: null, born: T });
+    }
+  }
+  for (const h of tracked) if (!used.has(h) && ++h.miss <= 3) next.push(h);
+  for (const h of next) {
+    const p = h.pts;
+    const palm = { x: (p[0].x + p[5].x + p[9].x + p[13].x + p[17].x) / 5, y: (p[0].y + p[5].y + p[9].y + p[13].y + p[17].y) / 5 };
+    if (h.palm && h.miss === 0) {
+      h.vx = lerp(h.vx, (palm.x - h.palm.x) / dt, .5);
+      h.vy = lerp(h.vy, (palm.y - h.palm.y) / dt, .5);
+    }
+    h.palm = palm;
+    h.size = dist(p[0], p[9]);
+    h.ext = extCount(p);
+    const inst = clamp(Math.hypot(h.vx, h.vy) / (W * 1.1), 0, 1);
+    if (inst > .55 && h.energy < .4 && T - h.born > .5 && soundOn) sfx.pluck(palm.y);
+    h.energy = Math.max(h.energy * .93, inst);
+    if (h.miss === 0) TIPS.forEach((ti, k) => { const tr = h.trails[k]; tr.push({ x: p[ti].x, y: p[ti].y }); if (tr.length > 14) tr.shift(); });
+  }
+  tracked = next;
+}
+
+function groupPersons() {
+  const s = [...tracked].sort((a, b) => a.miss - b.miss).slice(0, 4).sort((a, b) => a.palm.x - b.palm.x);
+  let groups = [];
+  if (s.length === 1) groups = [[s[0]]];
+  else if (s.length === 2) groups = Math.abs(s[0].palm.x - s[1].palm.x) < W * .42 ? [[s[0], s[1]]] : [[s[0]], [s[1]]];
+  else if (s.length === 3) groups = (s[1].palm.x - s[0].palm.x) > (s[2].palm.x - s[1].palm.x) ? [[s[0]], [s[1], s[2]]] : [[s[0], s[1]], [s[2]]];
+  else if (s.length >= 4) groups = [[s[0], s[1]], [s[2], s[3]]];
+  persons = groups.map((hands, i) => {
+    const cx = hands.reduce((a, h) => a + h.palm.x, 0) / hands.length;
+    const cy = hands.reduce((a, h) => a + h.palm.y, 0) / hands.length;
+    const sz = hands.reduce((a, h) => a + h.size, 0) / hands.length;
+    const side = groups.length === 2 ? i : (cx < W / 2 ? 0 : 1);
+    return { hands, side, center: { x: cx, y: cy }, size: sz, chest: { x: cx, y: cy + sz * 2.2 } };
+  });
+}
+
+/* ---------------- drawing helpers ---------------- */
+function ctrlPoint(p, q, seed, energy) {
+  const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const wob = Math.sin(T * 11 + seed * 7.3) * energy * len * .14 + Math.sin(T * 1.6 + seed * 2.1) * len * .018;
+  return { x: (p.x + q.x) / 2 + nx * wob, y: (p.y + q.y) / 2 + ny * wob + len * .07 };
+}
+function bez(p, c, q, u) {
+  const a = 1 - u;
+  return { x: a * a * p.x + 2 * a * u * c.x + u * u * q.x, y: a * a * p.y + 2 * a * u * c.y + u * u * q.y };
+}
+function thread(p, q, hue, seed, energy, alpha = 1, width = 1, pulse = true) {
+  const c = ctrlPoint(p, q, seed, energy);
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(c.x, c.y, q.x, q.y);
+  const w = U * width;
+  ctx.strokeStyle = `hsla(${hue},100%,55%,${.07 * alpha})`; ctx.lineWidth = w * 16; ctx.stroke();
+  ctx.strokeStyle = `hsla(${hue},100%,60%,${.22 * alpha})`; ctx.lineWidth = w * 6; ctx.stroke();
+  ctx.strokeStyle = `hsla(${hue},100%,82%,${.95 * alpha})`; ctx.lineWidth = w * 1.7; ctx.stroke();
+  if (pulse) {
+    for (let k = 0; k < 2; k++) {
+      const u = ((T * (.35 + (seed % 3) * .08) + seed * .37 + k * .5) % 1);
+      const b = bez(p, c, q, u);
+      sprite(b.x, b.y, U * 16, hue, alpha * .85);
+    }
+  }
+}
+function faint(p, q, hue, seed, energy, alpha) {
+  const c = ctrlPoint(p, q, seed, energy);
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(c.x, c.y, q.x, q.y);
+  ctx.strokeStyle = `hsla(${hue},100%,70%,${alpha})`; ctx.lineWidth = U * 1.1; ctx.stroke();
+}
+function bolt(x1, y1, x2, y2, hue, width, alpha, disp) {
+  let pts = [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+  let d = disp ?? Math.hypot(x2 - x1, y2 - y1) * .28;
+  for (let it = 0; it < 5; it++) {
+    const np = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1;
+      const off = rnd(-d, d);
+      np.push({ x: (a.x + b.x) / 2 - dy / l * off, y: (a.y + b.y) / 2 + dx / l * off }, b);
+    }
+    pts = np; d /= 2;
+  }
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = `hsla(${hue},100%,60%,${.18 * alpha})`; ctx.lineWidth = width * 7; ctx.stroke();
+  ctx.strokeStyle = `hsla(${hue},100%,70%,${.45 * alpha})`; ctx.lineWidth = width * 2.6; ctx.stroke();
+  ctx.strokeStyle = `hsla(${hue},60%,96%,${alpha})`; ctx.lineWidth = width; ctx.stroke();
+}
+
+/* ---------------- cat's cradle ---------------- */
+const PRIMARY = [[0, 0], [4, 4], [1, 3], [3, 1], [2, 2], [0, 4], [4, 0], [1, 1], [3, 3]];
+function drawCradle(person, alpha) {
+  const hs = [...person.hands].sort((a, b) => a.palm.x - b.palm.x);
+  const base = person.side * 5;
+  for (const h of hs) {
+    const t = TIPS.map(i => h.pts[i]);
+    for (let k = 0; k < 4; k++) faint(t[k], t[k + 1], NEON[(base + k) % 10], k + h.id, h.energy, .35 * alpha);
+    faint(t[0], t[4], NEON[(base + 7) % 10], 9 + h.id, h.energy, .25 * alpha);
+  }
+  if (hs.length < 2) return;
+  const [A, B] = hs;
+  const ta = TIPS.map(i => A.pts[i]), tb = TIPS.map(i => B.pts[i]);
+  const e = Math.max(A.energy, B.energy);
+  const ch = charge[person.side].level;
+  for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) faint(ta[i], tb[j], NEON[(i * 5 + j + base) % 10], i * 5 + j, e, .09 * alpha);
+  PRIMARY.forEach(([i, j], k) => {
+    const hue = (NEON[(k + base) % 10] + T * 14) % 360;
+    thread(ta[i], tb[j], ch > .05 ? lerp(hue, SIDE_HUE[person.side], ch) : hue, k * 1.7 + person.side * 5, e, alpha * (1 + ch), 1 + ch * 1.5);
+  });
+  // loops where the string wraps each fingertip
+  ctx.lineWidth = U * 1.4;
+  [...ta, ...tb].forEach((p, k) => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, U * (9 + 2 * Math.sin(T * 4 + k)), 0, TAU);
+    ctx.strokeStyle = `hsla(${NEON[(k + base) % 10]},100%,75%,${.6 * alpha})`; ctx.stroke();
+  });
+}
+function drawBridge(P, Q) {
+  const a = [...P.hands].sort((x, y) => y.palm.x - x.palm.x)[0];
+  const b = [...Q.hands].sort((x, y) => x.palm.x - y.palm.x)[0];
+  const e = Math.max(a.energy, b.energy);
+  for (let i = 0; i < 5; i++) {
+    const hue = (i % 2 ? 50 : 270) + Math.sin(T + i) * 20;
+    thread(a.pts[TIPS[i]], b.pts[TIPS[i]], hue, 20 + i, e, .75, .9);
+    faint(a.pts[TIPS[i]], b.pts[TIPS[4 - i]], (hue + 180) % 360, 30 + i, e, .3);
+  }
+}
+function drawHand(h, hue) {
+  if (showSkel) {
+    ctx.lineWidth = U * 1.6;
+    ctx.strokeStyle = `hsla(${hue},90%,70%,.32)`;
+    ctx.beginPath();
+    for (const [a, b] of BONES) { ctx.moveTo(h.pts[a].x, h.pts[a].y); ctx.lineTo(h.pts[b].x, h.pts[b].y); }
+    ctx.stroke();
+    for (let i = 0; i < 21; i++) if (!TIPS.includes(i)) sprite(h.pts[i].x, h.pts[i].y, U * 6, hue, .55);
+  }
+  TIPS.forEach((ti, k) => {
+    const tr = h.trails[k], th = NEON[(k * 2 + (hue > 250 ? 1 : 0)) % 10];
+    if (tr.length > 2) {
+      for (let i = 1; i < tr.length; i++) {
+        const f = i / tr.length;
+        ctx.strokeStyle = `hsla(${th},100%,65%,${f * .5})`; ctx.lineWidth = U * 7 * f;
+        ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke();
+      }
+    }
+    const p = h.pts[ti];
+    sprite(p.x, p.y, U * (26 + h.energy * 20), th, .9);
+    sprite(p.x, p.y, U * 8, 0, 1, 100);
+  });
+}
+
+/* ---------------- demo (intro / idle) ---------------- */
+function demoPersons() {
+  const R = Math.min(W, H) * .17;
+  const mk = (cx, cy, dir, ph) => {
+    const palm = { x: cx, y: cy };
+    const pts = new Array(21).fill(palm);
+    TIPS.forEach((ti, k) => {
+      const a = -Math.PI / 2 + (k - 2) * .42 * dir + Math.sin(T * .8 + k + ph) * .12;
+      const rr = R * (k === 0 ? .7 : 1) * (.85 + .2 * Math.sin(T * 1.1 + k * 1.3 + ph));
+      pts[ti] = { x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr + R * .5 };
+    });
+    return { id: ph * 10, pts, palm, energy: .12 + .1 * Math.sin(T * 2 + ph), size: R * .5, ext: 5, trails: [] };
+  };
+  const sp = Math.min(W * .36, H * .6), cy = H * .5 + Math.sin(T * .5) * R * .15;
+  return [{ side: 0, hands: [mk(W / 2 - sp + Math.sin(T * .7) * R * .2, cy, -1, 1), mk(W / 2 + sp + Math.cos(T * .6) * R * .2, cy, 1, 2)] }];
+}
+
+/* ---------------- particles ---------------- */
+function add(p) { if (parts.length < 2600) parts.push(p); }
+function spark(x, y, hue, sp, life, o = {}) {
+  const a = rnd(0, TAU), v = rnd(sp * .3, sp);
+  add({ type: 'spark', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life, max: life, hue, size: o.size ?? 1, drag: o.drag ?? .96, grav: o.grav ?? 0 });
+}
+function dot(x, y, hue, size, life, vx = 0, vy = 0, o = {}) {
+  add({ type: 'dot', x, y, vx, vy, life, max: life, hue, size, drag: o.drag ?? .94, grav: o.grav ?? 0, light: o.light ?? 60 });
+}
+function ring(x, y, hue, rmax, life, width = 3) { add({ type: 'ring', x, y, vx: 0, vy: 0, life, max: life, hue, rmax, size: width, drag: 1, grav: 0 }); }
+
+function firecracker(x, y, hue) {
+  flash = Math.max(flash, .45); flashHue = 45; shake = Math.max(shake, 14 * U);
+  ring(x, y, 50, 260 * U, .55, 4); ring(x, y, hue, 170 * U, .45, 2);
+  for (let i = 0; i < 110; i++) spark(x, y, NEON[i % 10], 1200 * U, rnd(.5, 1.3), { grav: 900 * U, drag: .975, size: rnd(.8, 1.6) });
+  for (let i = 0; i < 30; i++) {
+    const a = rnd(0, TAU), v = rnd(250, 800) * U;
+    add({ type: 'cracker', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 200 * U, life: rnd(.2, .95), max: 1, hue: NEON[i % 10], size: 1, drag: .97, grav: 700 * U });
+  }
+  dot(x, y, 0, 220 * U, .35, 0, 0, { light: 100 });
+  if (soundOn) { sfx.pop(); sfx.crackle(26, 1.0); }
+}
+function popCracker(p) {
+  for (let i = 0; i < 14; i++) spark(p.x, p.y, Math.random() < .5 ? 50 : p.hue, 520 * U, rnd(.25, .55), { grav: 500 * U, size: .9 });
+  dot(p.x, p.y, p.hue, 60 * U, .2, 0, 0, { light: 80 });
+}
+function explosion(x, y, hue) {
+  flash = 1; flashHue = hue; shake = Math.max(shake, 34 * U);
+  for (let k = 0; k < 3; k++) ring(x, y, k === 1 ? 0 : hue, (220 + k * 160) * U, .5 + k * .2, 6 - k * 1.5);
+  for (let i = 0; i < 170; i++) spark(x, y, hue + rnd(-25, 25), 1600 * U, rnd(.4, 1.1), { size: rnd(1, 2.2), drag: .955 });
+  for (let i = 0; i < 40; i++) { const a = rnd(0, TAU), v = rnd(80, 420) * U; dot(x, y, hue, rnd(40, 110) * U, rnd(.5, 1.2), Math.cos(a) * v, Math.sin(a) * v, { drag: .92 }); }
+  dot(x, y, 0, 380 * U, .5, 0, 0, { light: 100 });
+  if (soundOn) sfx.boom();
+}
+function updateParticles(dt) {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life -= dt;
+    if (p.life <= 0) {
+      if (p.type === 'cracker') { popCracker(p); if (soundOn) sfx.pop(); }
+      parts[i] = parts[parts.length - 1]; parts.pop(); continue;
+    }
+    if (p.follow) {
+      const dx = p.follow.pos.x - p.x, dy = p.follow.pos.y - p.y, d = Math.hypot(dx, dy) || 1;
+      if (d < p.follow.r * .6) { p.life = 0; continue; }
+      const acc = 2600 * U;
+      p.vx += dx / d * acc * dt + -dy / d * acc * .35 * dt; p.vy += dy / d * acc * dt + dx / d * acc * .35 * dt;
+      p.vx *= .9; p.vy *= .9;
+    }
+    const dr = Math.pow(p.drag, dt * 60);
+    p.vx *= dr; p.vy *= dr; p.vy += p.grav * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+}
+function drawParticles() {
+  for (const p of parts) {
+    const k = p.life / p.max;
+    if (p.type === 'spark' || p.type === 'suck') {
+      ctx.strokeStyle = `hsla(${p.hue},100%,${55 + 40 * k}%,${Math.min(1, k * 1.4)})`;
+      ctx.lineWidth = U * 2 * p.size;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * .028, p.y - p.vy * .028); ctx.stroke();
+    } else if (p.type === 'dot') {
+      sprite(p.x, p.y, p.size * (.4 + .6 * k), p.hue, k, p.light);
+    } else if (p.type === 'ring') {
+      ctx.strokeStyle = `hsla(${p.hue},100%,${p.hue === 0 ? 100 : 70}%,${k * .9})`;
+      ctx.lineWidth = U * p.size * (.5 + k * 2);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.rmax * (1 - k * k), 0, TAU); ctx.stroke();
+    } else if (p.type === 'cracker') {
+      sprite(p.x, p.y, U * 14, p.hue, 1);
+      sprite(p.x, p.y, U * 5, 0, 1, 100);
+    }
+  }
+}
+
+/* ---------------- energy ball ---------------- */
+function drawBall(x, y, r, hue, k) {
+  sprite(x, y, r * 4.6, hue, .25 + .3 * k);
+  sprite(x, y, r * 2.6, hue, .85);
+  ctx.save(); ctx.translate(x, y);
+  for (let i = 0; i < 12; i++) {
+    const L = r * (1.7 + .9 * Math.sin(T * 7 + i * 1.7)) * (.6 + k * .6);
+    ctx.rotate(TAU / 12 + Math.sin(T * 2.3 + i) * .02);
+    const g = ctx.createLinearGradient(0, 0, L, 0);
+    g.addColorStop(0, `hsla(${hue},100%,85%,.45)`); g.addColorStop(1, `hsla(${hue},100%,60%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(0, -r * .1); ctx.lineTo(L, 0); ctx.lineTo(0, r * .1); ctx.fill();
+  }
+  ctx.restore();
+  ctx.lineWidth = Math.max(1, r * .06);
+  for (let i = 0; i < 4; i++) {
+    ctx.strokeStyle = `hsla(${hue + i * 10},100%,75%,${.35 + .15 * i})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r * (1.05 + .08 * Math.sin(T * 5 + i)), r * (.32 + .12 * Math.sin(T * 3 + i * 2)), T * (1.2 + i * .7) + i, 0, TAU);
+    ctx.stroke();
+  }
+  for (let i = 0; i < 2 + Math.round(k * 3); i++) {
+    const a = rnd(0, TAU), R = r * rnd(1.3, 2.3);
+    bolt(x, y, x + Math.cos(a) * R, y + Math.sin(a) * R, hue, U * 1.4, .9, r * .35);
+  }
+  sprite(x, y, r * 1.5, hue, 1, 70);
+  sprite(x, y, r * 1.05, 0, 1, 100);
+  sprite(x, y, r * .7, 0, 1, 100);
+}
+
+function launch(side, cs) {
+  const tp = persons.find(p => p.side !== side && persons.length === 2);
+  let vx, vy;
+  const sp = (1000 + cs.level * 900) * U;
+  if (tp) { const dx = tp.chest.x - cs.pos.x, dy = tp.chest.y - cs.pos.y, d = Math.hypot(dx, dy) || 1; vx = dx / d * sp; vy = dy / d * sp; }
+  else {
+    const hv = cs.hands ? cs.hands.reduce((a, h) => ({ x: a.x + h.vx, y: a.y + h.vy }), { x: 0, y: 0 }) : { x: 0, y: 0 };
+    const hs = Math.hypot(hv.x, hv.y);
+    if (hs > W * .6) { vx = hv.x / hs * sp; vy = hv.y / hs * sp; }
+    else { vx = (cs.pos.x < W / 2 ? 1 : -1) * sp; vy = -sp * .08; }
+  }
+  shots.push({ x: cs.pos.x, y: cs.pos.y, vx, vy, r: cs.r, level: cs.level, side, hue: SIDE_HUE[side], target: tp ? tp.side : -1, age: 0 });
+  shake = Math.max(shake, 10 * U); flash = Math.max(flash, .25); flashHue = SIDE_HUE[side];
+  ring(cs.pos.x, cs.pos.y, SIDE_HUE[side], cs.r * 4, .4, 3);
+  if (soundOn) sfx.launch();
+  pulseChip('#c-throw');
+}
+
+function updateCharges(dt) {
+  for (const cs of charge) {
+    const p = persons.find(pp => pp.side === cs.side);
+    let posing = false;
+    if (p && p.hands.length === 2) {
+      const [a, b] = p.hands;
+      const s = (a.size + b.size) / 2, d = dist(a.palm, b.palm);
+      posing = d < s * 2.1 && a.ext >= 2 && b.ext >= 2;
+    }
+    if (posing) {
+      const [a, b] = p.hands;
+      const mid = { x: (a.palm.x + b.palm.x) / 2, y: (a.palm.y + b.palm.y) / 2 };
+      cs.pos = cs.pos && cs.level > 0 ? { x: lerp(cs.pos.x, mid.x, .5), y: lerp(cs.pos.y, mid.y, .5) } : mid;
+      cs.hands = p.hands; cs.failT = 0;
+      cs.level = Math.min(1, cs.level + dt * .48);
+      cs.r = U * (16 + cs.level * 60) * (1 + .06 * Math.sin(T * 30));
+      if (!cs.voice && soundOn) cs.voice = chargeVoice();
+      cs.voice && cs.voice.set(cs.level);
+      const n = Math.random() < cs.level * 1.6 ? 2 : 1;
+      for (let i = 0; i < n; i++) {
+        const ang = rnd(0, TAU), R = cs.r * rnd(3, 5.5);
+        add({ type: 'suck', x: cs.pos.x + Math.cos(ang) * R, y: cs.pos.y + Math.sin(ang) * R, vx: 0, vy: 0, life: 1.2, max: 1.2, hue: SIDE_HUE[cs.side] + rnd(-20, 20), size: rnd(.7, 1.5), drag: 1, grav: 0, follow: cs });
+      }
+      shake = Math.max(shake, cs.level * 5 * U);
+    } else if (cs.level > 0) {
+      cs.failT += dt;
+      if (cs.failT > .15) {
+        if (cs.level >= .28) launch(cs.side, cs);
+        else { for (let i = 0; i < 24; i++) spark(cs.pos.x, cs.pos.y, SIDE_HUE[cs.side], 400 * U, .4); if (soundOn) sfx.fizzle(); }
+        cs.level = 0; cs.r = 0; cs.hands = null;
+        if (cs.voice) { cs.voice.stop(); cs.voice = null; }
+      }
+    }
+  }
+}
+
+function updateShots(dt) {
+  for (let i = shots.length - 1; i >= 0; i--) {
+    const s = shots[i];
+    s.age += dt;
+    const tp = s.target >= 0 && persons.length === 2 ? persons.find(p => p.side === s.target) : null;
+    if (tp) {
+      const dx = tp.chest.x - s.x, dy = tp.chest.y - s.y, d = Math.hypot(dx, dy) || 1, sp = Math.hypot(s.vx, s.vy);
+      s.vx = lerp(s.vx, dx / d * sp, Math.min(1, dt * 2.2)); s.vy = lerp(s.vy, dy / d * sp, Math.min(1, dt * 2.2));
+    }
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    for (let k = 0; k < 3; k++) dot(s.x + rnd(-s.r, s.r) * .5, s.y + rnd(-s.r, s.r) * .5, s.hue + rnd(-15, 15), s.r * rnd(.8, 1.6), rnd(.25, .5), -s.vx * .08, -s.vy * .08);
+    if (Math.random() < .5) spark(s.x, s.y, s.hue, 300 * U, .3);
+
+    let done = false;
+    if (tp && s.age > .12) {
+      const cs = charge[tp.side];
+      if (cs.level > .2 && cs.pos && dist(cs.pos, s) < s.r + cs.r) {
+        firecracker(s.x, s.y, s.hue); explosion((s.x + cs.pos.x) / 2, (s.y + cs.pos.y) / 2, 280);
+        toast('CLASH!', 50); cs.level = 0; cs.r = 0; if (cs.voice) { cs.voice.stop(); cs.voice = null; }
+        done = true;
+      }
+      if (!done) for (const h of tp.hands) {
+        if (h.ext >= 3 && dist(h.palm, s) < s.r * .5 + h.size * .9) {
+          firecracker(s.x, s.y, s.hue); score[tp.side]++; updateScore();
+          toast('BLOCKED!', SIDE_HUE[tp.side]); pulseChip('#c-block');
+          done = true; break;
+        }
+      }
+      if (!done && dist(tp.chest, s) < s.r + tp.size * 1.3) {
+        explosion(s.x, s.y, s.hue); score[s.side]++; updateScore();
+        toast('HIT!', s.hue); done = true;
+      }
+    }
+    const m = s.r * 3;
+    if (!done && (s.x < -m || s.x > W + m || s.y < -m || s.y > H + m || s.age > 5)) done = true;
+    if (done) shots.splice(i, 1);
+  }
+}
+
+/* ---------------- UI helpers ---------------- */
+let toastTimer = 0;
+function toast(text, hue) {
+  const el = $('#toast');
+  el.textContent = text;
+  el.style.color = `hsl(${hue},100%,72%)`;
+  el.style.textShadow = `0 0 18px hsl(${hue},100%,60%), 0 0 60px hsl(${hue},100%,50%), 0 0 120px hsl(${hue},100%,45%)`;
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('go'), 1300);
+}
+function updateScore() { $('#s1').textContent = score[0]; $('#s2').textContent = score[1]; }
+const chipTimers = {};
+function pulseChip(sel) {
+  const el = $(sel); el.classList.add('on');
+  clearTimeout(chipTimers[sel]); chipTimers[sel] = setTimeout(() => el.classList.remove('on'), 900);
+}
+
+function downloadPage() {
+  const blob = new Blob([SOURCE_HTML], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'neon-cradle.html';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function snapshot() {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#04010c'; g.fillRect(0, 0, W, H);
+  if (video.readyState >= 2) {
+    g.save();
+    g.filter = 'brightness(.42) saturate(1.25) contrast(1.15)';
+    if (mirror) { g.translate(W, 0); g.scale(-1, 1); }
+    g.drawImage(video, view.ox, view.oy, view.w, view.h);
+    g.restore();
+  }
+  g.globalCompositeOperation = 'screen';
+  g.drawImage(cv, 0, 0);
+  flash = .6; flashHue = 0;
+  c.toBlob(b => {
+    if (!b) return;
+    const url = URL.createObjectURL(b), a = document.createElement('a');
+    a.href = url; a.download = `neon-cradle-${Date.now()}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }, 'image/png');
+}
+
+/* ---------------- main loop ---------------- */
+let lastFrame = performance.now(), lastVT = -1, fps = 60, hudT = 0, detectErrors = 0;
+function frame(now) {
+  const dt = Math.min(.05, (now - lastFrame) / 1000); lastFrame = now; T += dt;
+  fps = lerp(fps, 1 / Math.max(dt, .001), .05);
+
+  if (running && landmarker && video.readyState >= 2 && video.currentTime !== lastVT) {
+    lastVT = video.currentTime;
+    try { ingest(landmarker.detectForVideo(video, now), now); detectErrors = 0; }
+    catch (e) {
+      if (++detectErrors > 5 && delegate === 'GPU' && landmarker._make) {
+        delegate = 'CPU'; const make = landmarker._make; landmarker = null;
+        make('CPU').then(l => { l._make = make; landmarker = l; });
+      }
+    }
+  }
+  groupPersons();
+  updateCharges(dt);
+  updateShots(dt);
+  updateParticles(dt);
+  render(dt);
+
+  hudT += dt;
+  if (running && hudT > .25) {
+    hudT = 0;
+    const n = tracked.length;
+    $('#status').innerHTML = `<b>${n}</b> hand${n === 1 ? '' : 's'} · <b>${persons.length}</b> player${persons.length === 1 ? '' : 's'} · ${Math.round(fps)} fps`;
+    $('#hint').classList.toggle('on', n === 0);
+    $('#c-cradle').classList.toggle('on', persons.some(p => p.hands.length === 2));
+    $('#c-charge').classList.toggle('on', charge.some(c => c.level > 0));
+  }
+  [0, 1].forEach(i => {
+    const m = $(i ? '#m2' : '#m1');
+    m.classList.toggle('on', charge[i].level > 0);
+    m.firstElementChild.style.width = (charge[i].level * 100) + '%';
+  });
+  requestAnimationFrame(frame);
+}
+
+function render(dt) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, W, H);
+  shake *= Math.pow(.02, dt);
+  if (shake > .3) ctx.setTransform(1, 0, 0, 1, rnd(-shake, shake), rnd(-shake, shake));
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  for (const m of motes) {
+    m.y -= dt * .012 * m.z; m.x += Math.sin(T * .3 + m.p) * dt * .004;
+    if (m.y < -.02) { m.y = 1.02; m.x = Math.random(); }
+    sprite(m.x * W, m.y * H, U * 10 * m.z, m.h, .25 * m.z * (.6 + .4 * Math.sin(T * 2 + m.p)));
+  }
+
+  for (const cs of charge) if (cs.level > 0 && cs.pos) {
+    const g = ctx.createRadialGradient(cs.pos.x, cs.pos.y, 0, cs.pos.x, cs.pos.y, Math.max(W, H) * .7);
+    g.addColorStop(0, `hsla(${SIDE_HUE[cs.side]},100%,50%,${.18 * cs.level})`); g.addColorStop(1, 'hsla(0,0%,0%,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+
+  if (!running || tracked.length === 0) {
+    for (const p of demoPersons()) { drawCradle(p, running ? .35 : .9); p.hands.forEach(h => TIPS.forEach((ti, k) => sprite(h.pts[ti].x, h.pts[ti].y, U * 24, NEON[k * 2], running ? .3 : .8))); }
+  } else {
+    if (persons.length === 2) drawBridge(persons[0], persons[1]);
+    for (const p of persons) drawCradle(p, 1);
+    for (const p of persons) for (const h of p.hands) drawHand(h, SIDE_HUE[p.side]);
+  }
+
+  for (const cs of charge) if (cs.level > 0 && cs.pos) {
+    const hue = SIDE_HUE[cs.side];
+    if (cs.hands) for (const h of cs.hands) for (const ti of TIPS)
+      if (Math.random() < .12 + cs.level * .35) bolt(h.pts[ti].x, h.pts[ti].y, cs.pos.x, cs.pos.y, hue, U * 1.2, .8);
+    drawBall(cs.pos.x, cs.pos.y, cs.r, hue, cs.level);
+  }
+  for (const s of shots) drawBall(s.x, s.y, s.r, s.hue, s.level);
+  drawParticles();
+
+  if (flash > .01) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = `hsla(${flashHue},100%,${flashHue === 0 ? 100 : 70}%,${flash * .45})`;
+    ctx.fillRect(0, 0, W, H);
+    flash *= Math.pow(.004, dt);
+  }
+  ctx.globalAlpha = 1;
+}
+requestAnimationFrame(frame);
+
+/* ---------------- wiring ---------------- */
+async function begin() {
+  const err = $('#err'), load = $('#loading'), cta = $('#cta'), txt = $('#loadtxt');
+  err.classList.remove('on'); cta.style.display = 'none'; load.classList.add('on');
+  initAudio(); if (ac && ac.state === 'suspended') ac.resume();
+  try {
+    txt.textContent = 'Waking up the camera…';
+    const cam = startCamera();
+    const model = landmarker ? Promise.resolve(landmarker) : loadModel();
+    await cam;
+    txt.textContent = 'Loading hand tracking…';
+    landmarker = await model;
+    running = true;
+    $('#intro').classList.add('gone');
+    $('#hud').classList.add('on');
+  } catch (e) {
+    console.error(e);
+    let msg = e && e.message ? e.message : String(e);
+    if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) msg = 'Camera permission was blocked. Allow camera access for this page in your browser settings, then try again.';
+    else if (e && e.name === 'NotFoundError') msg = 'No camera was found on this device.';
+    else if (/fetch|import|network|Failed/i.test(msg)) msg = 'Could not load the hand-tracking model. Check your internet connection (it is needed the first time), then try again.';
+    err.textContent = msg; err.classList.add('on');
+    load.classList.remove('on'); cta.style.display = '';
+  }
+}
+$('#start').addEventListener('click', begin);
+$('#dl').addEventListener('click', downloadPage);
+$('#b-dl').addEventListener('click', downloadPage);
+$('#b-snap').addEventListener('click', snapshot);
+$('#b-reset').addEventListener('click', () => { score = [0, 0]; updateScore(); });
+$('#b-flip').addEventListener('click', async () => {
+  facing = facing === 'user' ? 'environment' : 'user';
+  tracked = [];
+  try { await startCamera(); } catch (e) { facing = facing === 'user' ? 'environment' : 'user'; await startCamera().catch(() => {}); }
+});
+$('#b-mirror').addEventListener('click', e => {
+  mirror = !mirror; tracked = [];
+  video.classList.toggle('mirror', mirror); e.currentTarget.classList.toggle('off', !mirror);
+});
+$('#b-skel').addEventListener('click', e => { showSkel = !showSkel; e.currentTarget.classList.toggle('off', !showSkel); });
+$('#b-sound').addEventListener('click', e => {
+  soundOn = !soundOn; e.currentTarget.classList.toggle('off', !soundOn);
+  if (master) master.gain.setTargetAtTime(soundOn ? .8 : 0, ac.currentTime, .05);
+  if (!soundOn) charge.forEach(c => { if (c.voice) { c.voice.stop(); c.voice = null; } });
+});
+const fsEl = document.documentElement;
+if (!(fsEl.requestFullscreen || fsEl.webkitRequestFullscreen)) $('#b-fs').style.display = 'none';
+$('#b-fs').addEventListener('click', () => {
+  if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl);
+});
+video.addEventListener('resize', computeView);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ac && ac.state === 'suspended') ac.resume(); });
+</script>
+</body>
+</html>
